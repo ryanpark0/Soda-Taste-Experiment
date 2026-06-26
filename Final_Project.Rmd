@@ -1,0 +1,191 @@
+---
+title: "Final Project PSTAT 122"
+author: "Ryan Park"
+date: "2025-06-11"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(pwr)
+library(readxl)
+```
+
+# Introduction
+
+The sensory experience of consuming soda is shaped by a complex interaction of physiological and psychological processes. Although flavor is typically associated with taste buds and ingredients, the perception of flavor is also significantly influenced by factors such as smell, texture, temperature, visual presentation, and method of consumption. In the food and beverage industry, understanding these influences can help companies design better consumer experiences and achieve a competitive edge (Spence, 2015). 
+
+Several studies have explored how multisensory cues shape consumption experiences. For example, Shakar et al. (2009) found that visual information and cognitive, expectancy-based input, such as color and label cues, alter how consumers perceive flavor intensity and enjoyment. These insights have led researchers to consider how non-ingredient factors, such as pouring style or drinking mechanism, might change the way a beverage is perceived. 
+
+In this experiment, I focus specifically on how pouring method and consumption method affect soda taste ratings. Although the topic appears simple, it connects to broader principles of sensory science and consumer behavior. Prior studies have shown that multisensory cues, including visual and tactile elements, can alter perceived taste. This experiment seeks to quantify these effects by comparing taste ratings across multiple pouring and consumption methods. My hypothesis is that pouring down the side of a glass, which is thought to reduce foam and preserve carbonation, will result in higher ratings. I also hypothesize that using a straw may enhance the experience by reducing olfactory interference or creating a smoother mouthfeel. This study uses a full factorial design with blocking to test for both main effects and interactions. The findings may inform broader trends in consumer behavior, marketing strategies, and product presentation design. 
+
+# Methods
+
+## Experimental Design
+
+I used a 2x3 full factorial within-subjects design, in which each of the  participants rated all six combinations of:
+
+- **Pouring Method**
+  1) Down the side of the glass
+
+  2) Straight into the center of a glass
+
+  3) Left in the can/bottle
+
+- **Consumption Method**: 
+  1) Using a straw
+
+  2) Drinking directly from the container
+
+Each participant served as a block, which controls for variability in personal taste preferences. This approach reduces unexplained error and increases statistical power.
+
+## Data Collection
+I used Cohen's f (set at 0.5 for a medium effect) as the effect size measure for conducting power and sample size calculation. This is the standard approach when planning or evaluating ANOVA designs, particularly when comparing multiple group means. According to Maher et al., f values of 0.10, 0.25, and 0.40 represent small, medium, and large effects, respectively. A medium effect size (f = 0.25) was assumed based on conventions widely accepted in behavioral and sensory research. This effect size reflects a moderate but practically meaningful difference across groups in a factorial design, making it suitable for evaluating perceptual ratings such as taste. After running my sample size calculations, I determined that a sample size of 36 was appropriate for this experiment. 
+
+```{r}
+effect_size <- 0.25
+alpha <- 0.05
+power <- 0.80
+num_groups <- 6
+
+pwr_result <- pwr.anova.test(k = num_groups, f = effect_size, sig.level = alpha, power = power)
+ceiling(pwr_result$n)
+```
+
+Participants were recruited informally and ranged from 18-22 years old. Each participant completed the tasting in a single session. To minimize bias:
+
+- The order of soda sample presentation was randomized.
+
+- All sodas were the same brand and temperature
+
+- All soda samples were poured fresh immediately before tasting to ensure consistency. 
+
+Ratings were collected using a 0-10 scale, where 0 = "worst taste ever" and 10 = "best possible taste." Each of the 36 participants rated the same six conditions. This yielded a total of 216 observations (36 blocks x 6 treatments). 
+
+During the data collection phase, a few technical challenges could have potentially influenced the consistency of results:
+
+- Pouring variation: Despite efforts to remain consistent, slight human error during the pouring process may have affected carbonation or foam levels.
+
+- Timing delays: Minor delays between pouring tasting could have affected soda fizziness or temperature, especially when testing multiple combinations in sequence.
+
+- Participant bias: Some participants may have guessed the purpose of this experiment, unintentionally influencing their responses.
+
+- Environment Noise: Testing was done informally, so background distractions or inconsistent lighting may have slighted altered participants' focus or perception.
+
+These factors were controlled to the best extent possible, but they should be considered when interpreting results.
+
+```{r}
+knitr::include_graphics('Final Project.pdf')
+```
+
+## Statistical Methods
+
+I performed a two-way ANOVA with the following model:
+
+> Rating ~ Pouring * Consumption + Participant
+
+This model estimates the main effects of pouring and consumption method, as well as their interaction, and accounts for participant-specific variation. 
+
+After fitting the ANOVA model, I conducted a Tukey Honestly Significant Difference (TukeyHSD) test for pairwise comparisons among the six treatment combinations (each unique pouring x consumption pair). TukeyHSD controls the family-wise error rate and is commonly used for balanced designs like this one.
+
+### Assumption Checks:
+
+- Normality 
+
+- Homogeneity of Variance
+
+- Independence
+
+```{r}
+data <- read_excel("soda_ratings.xlsx")
+data$Participant <- as.factor(data$Participant)
+data$Group <- interaction(data$Pouring, data$Consumption, sep = " - ")
+```
+
+# Results
+
+## Descriptive Statistics 
+
+### Boxplot
+```{r}
+ggplot(data, aes(x=Pouring, y=Rating, fill=Consumption)) +
+  labs(title="Soda Rating by Pouring and Consumption Method", y="Rating") +
+  geom_boxplot() 
+```
+
+## ANOVA Table
+```{r}
+model <- aov(Rating ~ Pouring * Consumption + Participant, data = data)
+anova_table <- summary(model)
+kable(anova_table[[1]])
+```
+
+## TukeyHSD
+```{r}
+data$Group <- interaction(data$Pouring, data$Consumption, sep = "-")
+model_tukey <- aov(Rating ~ Group + Participant, data = data)
+
+tukey_results <- TukeyHSD(model_tukey, "Group")
+tukey_df <- as.data.frame(tukey_results$Group)
+tukey_df$Comparison <- rownames(tukey_df)
+
+tukey_df <- tukey_df[, c("Comparison", "diff", "lwr", "upr", "p adj")]
+
+kable(tukey_df, digits = 3, caption = "TukeyHSD Pairwise Comparison")
+```
+
+## Assumption Checks
+
+### Normality
+```{r}
+residuals <- residuals(model)
+hist(residuals, main = "Histogram of Residuals", xlab = "Residuals", col = "blue", border = "white")
+```
+
+```{r}
+shapiro.test(residuals)
+```
+
+### Q-Q Plot (For Normality of Residuals)
+```{r}
+plot(model, which = 2, main = "Normal Q-Q Plot")
+```
+
+### Residuals vs Fitted Plot (For Homegeneity of Variance)
+```{r}
+plot(model, which = 1, main = "Residuals vs Fitted Values")
+```
+
+# Discussion
+This experiment demonstrates that both pouring and consumption methods significantly influence perceived soda taste. Specifically:
+
+- Pouring down the side of a glass likely preserves carbonation and enhances texture.
+
+- Drinking through a straw may create a smoother mouthfeel or reduce interference from the sense of smell.
+
+The TukeyHSD results confirm that the highest-rated combination (DownSide + Straw) was rated significantly higher than the lowest-rated one (Container + Container). Although the interaction effect was present, it was relatively small, suggesting that pouring and consumption methods contribute independently to perceived taste.
+
+To validate the use of ANOVA, I ran some diagnostic checks using plots and the Shapiro-Wilk test to make sure the assumptions of normality, equal variance, and independence all held.
+
+- The histogram of residuals showed a bell-shaped symmetric distribution centered near zero. The Q-Q plot further confirmed this, with most points falling along the diagonal. Both of these results support normality.
+
+- The Shapiro-Wilk test returned a p-value of 0.0001323, indicating a statistically significant deviation from normality. However, given the large sample size, minor deviations are not uncommon and may not substantially impact the robustness of the ANOVA.
+
+- The residuals vs fitted values plot showed no clear pattern or funneling, supporting homogeneity of variance.
+
+After conducting this experiment, the results indicate that **pouring method** had a clear effect on perceived soda taste. Specifically, pouring down the side of the glass produced the highest ratings across participants. This may be due to preservation of carbonation or smoother drinking experience. Consumption method had a smaller but noticeable effect, with straw use slightly favored over drinking from the container.
+
+The interaction between pouring and consumption was statistically significant, but its effect size was small. This indicates that while there is an interaction effect, the practical influence on taste ratings is minimal. This suggests a potential combined influence; however, pouring and consumption methods primarily act independently. Additionally, participant differences were small and likely reflect random variation in personal preference.
+
+While this study was limited in scale, the trends observed align with existing literature on sensory perception and beverage presentation. My study only included 36 UCSB students, so their taste and sensory preferences, along with human error, may have slightly affected the results. In future studies, expanding the participant pool and including fixed sensory factors, such as temperature or glass type, could provide deeper insight. 
+
+# References
+Shankar, M.U., Levitan, C.A., Prescott, J. et al. The Influence of Color and Label Information on Flavor Perception. Chem. Percept. 2, 53–58 (2009). https://doi.org/10.1007/s12078-009-9046-4
+
+Spence, C. (2015). Multisensory flavor perception. Cell, 161(1), 24–35. https://doi.org/10.1016/j.cell.2015.02.043 
+
+Maher, Jessica Middlemis, Jonathan C. Markey, and Diane Ebert-May. "The other half of the story: effect size analysis in quantitative research." CBE—Life Sciences Education 12.3 (2013): 345-351.
